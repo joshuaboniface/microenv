@@ -90,7 +90,7 @@ sensor:
       name: "SGP41 VOC Index"
       id: sgp41_voc_index
       accuracy_decimals: 0
-      icon: mdi:molecule
+      icon: mdi:waves-arrow-up
       filters:
         - sliding_window_moving_average:          # We take a reading every 15 seconds, but calculate the sliding
             window_size: 12                       # average over 12 readings i.e. 60 seconds/1 minute to normalize
@@ -99,7 +99,7 @@ sensor:
       name: "SGP41 NOx Index"
       id: sgp41_nox_index
       accuracy_decimals: 0
-      icon: mdi:molecule
+      icon: mdi:waves-arrow-up
       filters:
         - sliding_window_moving_average:
             window_size: 12
@@ -113,6 +113,7 @@ sensor:
   - platform: template
     name: "SGP41 TVOC (µg/m³)"
     id: sgp41_tvoc_ugm3
+    icon: mdi:molecule
     lambda: |-
       float i = id(sgp41_voc_index).state;
       if (i < 1) return NAN;
@@ -124,6 +125,7 @@ sensor:
   - platform: template
     name: "SGP41 TVOC (ppb)"
     id: sgp41_tvoc_ppb
+    icon: mdi:molecule
     lambda: |-
       float tvoc_ugm3 = id(sgp41_tvoc_ugm3).state;
       float tvoc_ppm = tvoc_ugm3 * 0.436;  // ppb estimated using isobutylene MW (56.1 g/mol)
@@ -134,6 +136,7 @@ sensor:
   - platform: template
     name: "SGP41 eCO2 (approx ppm)"
     id: sgp41_eco2_ppm
+    icon: mdi:molecule-co2
     lambda: |-
       float tvoc_ppb = id(sgp41_tvoc_ppb).state;
       float eco2_ppm = 400.0 + 1.5 * tvoc_ppb;
