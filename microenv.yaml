@@ -134,8 +134,8 @@ sensor:
     accuracy_decimals: 0
 
   - platform: template
-    name: "SGP41 eCO2 (approx ppm)"
-    id: sgp41_eco2_ppm
+    name: "SGP41 eCO2 (appr.)"
+    id: sgp41_eco2_appr
     icon: mdi:molecule-co2
     lambda: |-
       float tvoc_ppb = id(sgp41_tvoc_ppb).state;
