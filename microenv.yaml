@@ -121,6 +121,7 @@ sensor:
       return tvoc;
     unit_of_measurement: "µg/m³"
     accuracy_decimals: 0
+    update_interval: 15s
 
   - platform: template
     name: "SGP41 TVOC (ppb)"
@@ -132,6 +133,7 @@ sensor:
       return tvoc_ppm;
     unit_of_measurement: "ppb"
     accuracy_decimals: 0
+    update_interval: 15s
 
   - platform: template
     name: "SGP41 eCO2 (appr.)"
@@ -144,6 +146,7 @@ sensor:
       return eco2_ppm;
     unit_of_measurement: "ppm"
     accuracy_decimals: 0
+    update_interval: 15s
 
   - platform: sht4x
     temperature:
@@ -185,6 +188,39 @@ sensor:
       float a = 17.27, b = 237.7;
       float alpha = ((a * temp) / (b + temp)) + log(rh / 100.0);
       return (b * alpha) / (a - alpha);
+    update_interval: 15s
+
+  - platform: template
+    name: "Room Health Score"
+    id: room_health_score
+    unit_of_measurement: "%"
+    icon: mdi:home-heart
+    lambda: |-
+      float voc_index = id(sgp41_voc_index).state;
+      float temp = id(sht45_temperature).state;
+      float humidity = id(sht45_humidity).state;
+  
+      // VOC Score (0–100)
+      float voc_score = 0;
+      if (voc_index <= 100) voc_score = 100;
+      else if (voc_index <= 200) voc_score = 80;
+      else if (voc_index <= 300) voc_score = 60;
+      else if (voc_index <= 400) voc_score = 40;
+      else if (voc_index <= 500) voc_score = 50;
+      else voc_score = 0;
+  
+      // Temperature Score (0–100)
+      float temp_score = 100.0 - abs(temp - 23.0) * 10.0;
+      if (temp_score < 0) temp_score = 0;
+  
+      // Humidity Score (0–100), ideal range 35–55%
+      float humidity_score = 100.0 - abs(humidity - 50.0) * 3.0;
+      if (humidity_score < 0) humidity_score = 0;
+  
+      // Weighted average
+      float overall_score = (voc_score * 0.5 + temp_score * 0.25 + humidity_score * 0.25);
+  
+      return (int) round(overall_score);
     update_interval: 15s
 
   - platform: wifi_signal
