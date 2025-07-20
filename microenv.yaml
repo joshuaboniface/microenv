@@ -93,8 +93,8 @@ sensor:
       icon: mdi:waves-arrow-up
       filters:
         - sliding_window_moving_average:          # We take a reading every 15 seconds, but calculate the sliding
-            window_size: 12                       # average over 12 readings i.e. 60 seconds/1 minute to normalize
-            send_every: 3                         # brief spikes while still sending a value every 15 seconds.
+            window_size: 20                       # average over 20 readings i.e. 300 seconds/5 minutes to normalize
+            send_every: 4                         # brief spikes while still sending a value every 60 seconds.
     nox: 
       name: "SGP41 NOx Index"
       id: sgp41_nox_index
@@ -102,13 +102,13 @@ sensor:
       icon: mdi:waves-arrow-up
       filters:
         - sliding_window_moving_average:
-            window_size: 12
-            send_every: 3
+            window_size: 20
+            send_every: 4
     compensation:
       temperature_source: sht45_temperature
       humidity_source: sht45_humidity
     store_baseline: true 
-    update_interval: 5s
+    update_interval: 15s
 
   - platform: template
     name: "SGP41 TVOC (µg/m³)"
