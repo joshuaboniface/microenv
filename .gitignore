@@ -2,3 +2,5 @@ venv/
 .esphome/
 custom/
 update-all.sh
+secrets.yaml
+*.stl

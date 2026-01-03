@@ -1,7 +1,7 @@
 ---
 
 ###############################################################################
-# MicroEnv v1.0 ESPHome configuration
+# MicroEnv v2.0 ESPHome configuration
 ###############################################################################
 #
 #    Copyright (C) 2025 Joshua M. Boniface <joshua@boniface.me>
@@ -26,11 +26,11 @@ esphome:
   friendly_name: "MicroEnv Sensor"
   project:
     name: "Joshua Boniface.microenv"
-    version: "1.0"
+    version: "2.0"
   min_version: 2025.11.0
 
 dashboard_import:
-  package_import_url: github://joshuaboniface/microenv/microenv.yaml@v1.x
+  package_import_url: github://joshuaboniface/microenv/microenv.yaml@v2.x
 
 esp32:
   board: esp32-c3-devkitm-1
@@ -101,7 +101,7 @@ globals:
     initial_value: "0.3"
 
 logger:
-  level: INFO
+  level: DEBUG
   baud_rate: 115200
 
 api:
