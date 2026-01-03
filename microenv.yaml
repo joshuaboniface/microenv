@@ -27,10 +27,10 @@ esphome:
   project:
     name: "Joshua Boniface.microenv"
     version: "1.0"
-  min_version: 2025.5.0
+  min_version: 2025.11.0
 
 dashboard_import:
-  package_import_url: github://joshuaboniface/microenv/microenv.yaml
+  package_import_url: github://joshuaboniface/microenv/microenv.yaml@v1.x
 
 esp32:
   board: esp32-c3-devkitm-1
@@ -42,11 +42,10 @@ preferences:
   flash_write_interval: 15sec
 
 globals:
-  # Defaults to -5 due to heating from the ESP
   - id: temperature_offset
     type: float
     restore_value: true
-    initial_value: "-5.0"
+    initial_value: "0.0"
 
   - id: humidity_offset
     type: float
@@ -86,29 +85,29 @@ i2c:
 
 sensor:
   - platform: sgp4x
-    voc: 
+    voc:
       name: "SGP41 VOC Index"
       id: sgp41_voc_index
       accuracy_decimals: 0
       icon: mdi:waves-arrow-up
       filters:
-        - sliding_window_moving_average:          # We take a reading every 15 seconds, but calculate the sliding
-            window_size: 20                       # average over 20 readings i.e. 300 seconds/5 minutes to normalize
-            send_every: 4                         # brief spikes while still sending a value every 60 seconds.
-    nox: 
+        - sliding_window_moving_average:          # We take a reading every 5 seconds, but calculate the sliding
+            window_size: 12                       # average over 12 readings i.e. 60 seconds/1 minute to normalize
+            send_every: 3                         # brief spikes while still sending a value every 15 seconds.
+    nox:
       name: "SGP41 NOx Index"
       id: sgp41_nox_index
       accuracy_decimals: 0
       icon: mdi:waves-arrow-up
       filters:
         - sliding_window_moving_average:
-            window_size: 20
-            send_every: 4
+            window_size: 12
+            send_every: 3
     compensation:
       temperature_source: sht45_temperature
       humidity_source: sht45_humidity
-    store_baseline: true 
-    update_interval: 15s
+    store_baseline: true
+    update_interval: 5s
 
   - platform: template
     name: "SGP41 TVOC (µg/m³)"
@@ -163,6 +162,20 @@ sensor:
       id: sht45_humidity
       accuracy_decimals: 1
       filters:
+        - lambda: |-
+            // Grab measured and corrected temperatures
+            float t_meas = id(sht45_temperature).state - id(temperature_offset);
+            float t_corr = id(sht45_temperature).state;
+            float rh_meas = x;
+
+            // Compute saturation vapor pressures (Magnus formula)
+            auto es = [](float T) { return 6.112 * exp((17.62 * T) / (243.12 + T)); };
+            float rh_corr = rh_meas * es(t_meas) / es(t_corr);
+
+            // Clamp to 0–100 %
+            if (rh_corr < 0) rh_corr = 0;
+            if (rh_corr > 100) rh_corr = 100;
+            return rh_corr;
         - offset: !lambda return id(humidity_offset);
         - sliding_window_moving_average:
             window_size: 4
@@ -196,30 +209,61 @@ sensor:
     unit_of_measurement: "%"
     icon: mdi:home-heart
     lambda: |-
-      float voc_index = id(sgp41_voc_index).state;
+      float voc = id(sgp41_tvoc_ppb).state;
+      if (isnan(voc) || voc < 1) voc = 1;
       float temp = id(sht45_temperature).state;
       float humidity = id(sht45_humidity).state;
-  
-      // VOC Score (0–100)
-      float voc_score = 0;
-      if (voc_index <= 100) voc_score = 100;
-      else if (voc_index <= 200) voc_score = 80;
-      else if (voc_index <= 300) voc_score = 60;
-      else if (voc_index <= 400) voc_score = 40;
-      else if (voc_index <= 500) voc_score = 50;
-      else voc_score = 0;
-  
-      // Temperature Score (0–100)
-      float temp_score = 100.0 - abs(temp - 23.0) * 10.0;
+
+      float temp_min = id(room_health_temperature_min);
+      float temp_max = id(room_health_temperature_max);
+      float temp_penalty = id(room_health_temperature_penalty);
+      float humid_min = id(room_health_humidity_min);
+      float humid_max = id(room_health_humidity_max);
+      float humid_penalty = id(room_health_humidity_penalty);
+      float voc_weight = id(room_health_voc_weight);
+      float temp_weight = id(room_health_temperature_weight);
+      float humid_weight = id(room_health_humidity_weight);
+
+      // VOC score (0–100) mapped to categories from Chemical Pollution levels below
+      float voc_score;
+      if (voc <= 200) {
+        voc_score = 100.0;
+      } else if (voc <= 400) {
+        // 200–400: 100 → 90
+        voc_score = 100.0 - (voc - 200) * (10.0 / 200.0);
+      } else if (voc <= 600) {
+        // 400–600: 90 → 70
+        voc_score = 90.0 - (voc - 400) * (20.0 / 200.0);
+      } else if (voc <= 1500) {
+        // 600–1500: 70 → 40
+        voc_score = 70.0 - (voc - 600) * (30.0 / 900.0);
+      } else if (voc <= 3000) {
+        // 1500–3000: 40 → 0
+        voc_score = 40.0 - (voc - 1500) * (40.0 / 1500.0);
+      } else {
+        voc_score = 0.0;
+      }
+
+      // Temperature score
+      float temp_score = 100;
+      if (temp < temp_min) temp_score = 100 - (temp_min - temp) * temp_penalty;
+      else if (temp > temp_max) temp_score = 100 - (temp - temp_max) * temp_penalty;
       if (temp_score < 0) temp_score = 0;
-  
-      // Humidity Score (0–100), ideal range 35–55%
-      float humidity_score = 100.0 - abs(humidity - 50.0) * 3.0;
+
+      // Humidity score
+      float humidity_score = 100;
+      if (humidity < humid_min) humidity_score = 100 - (humid_min - humidity) * humid_penalty;
+      else if (humidity > humid_max) humidity_score = 100 - (humidity - humid_max) * humid_penalty;
       if (humidity_score < 0) humidity_score = 0;
-  
+
       // Weighted average
-      float overall_score = (voc_score * 0.5 + temp_score * 0.25 + humidity_score * 0.25);
-  
+      float total_weights = voc_weight + temp_weight + humid_weight;
+      if (total_weights <= 0) total_weights = 1.0;
+      voc_weight /= total_weights;
+      temp_weight /= total_weights;
+      humid_weight /= total_weights;
+      float overall_score = (voc_score * voc_weight + temp_score * temp_weight + humidity_score * humid_weight);
+
       return (int) round(overall_score);
     update_interval: 15s
 
@@ -261,7 +305,7 @@ button:
 
 number:
   # Temperature offset:
-  # A calibration from -30 to +5 for the temperature sensor
+  # A calibration from -30 to +10 for the temperature sensor
   - platform: template
     name: "Temperature Offset"
     id: temperature_offset_setter
@@ -277,12 +321,12 @@ number:
             value: !lambda 'return float(x);'
 
   # Humidity offset:
-  # A calibration from -20 to +20 for the humidity sensor
+  # A calibration from -50 to +50 for the humidity sensor
   - platform: template
     name: "Humidity Offset"
     id: humidity_offset_setter
-    min_value: -20
-    max_value: 20
+    min_value: -50
+    max_value: 50
     step: 0.1
     lambda: |-
       return id(humidity_offset);
