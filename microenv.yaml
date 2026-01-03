@@ -52,6 +52,54 @@ globals:
     restore_value: true
     initial_value: "0.0"
 
+  #
+  # Room Health settings
+  #
+  - id: room_health_temperature_min
+    type: float
+    restore_value: true
+    initial_value: "21.0"
+
+  - id: room_health_temperature_max
+    type: float
+    restore_value: true
+    initial_value: "24.0"
+
+  - id: room_health_temperature_penalty
+    type: float
+    restore_value: true
+    initial_value: "10.0"
+
+  - id: room_health_humidity_min
+    type: float
+    restore_value: true
+    initial_value: "40.0"
+
+  - id: room_health_humidity_max
+    type: float
+    restore_value: true
+    initial_value: "60.0"
+
+  - id: room_health_humidity_penalty
+    type: float
+    restore_value: true
+    initial_value: "5.0"
+
+  - id: room_health_voc_weight
+    type: float
+    restore_value: true
+    initial_value: "0.4"
+
+  - id: room_health_temperature_weight
+    type: float
+    restore_value: true
+    initial_value: "0.3"
+
+  - id: room_health_humidity_weight
+    type: float
+    restore_value: true
+    initial_value: "0.3"
+
 logger:
   level: INFO
   baud_rate: 115200
@@ -292,6 +340,35 @@ text_sensor:
     mac_address:
       name: "WiFi MAC Address"
 
+  - platform: template
+    name: "Chemical Pollution"
+    id: sgp41_chemical_pollution
+    icon: mdi:molecule
+    lambda: |-
+      float voc = id(sgp41_tvoc_ppb).state;
+      if (isnan(voc) || voc < 1) return {"Unknown"};
+      else if (voc <= 200) return {"Excellent"};
+      else if (voc <= 400) return {"Good"};
+      else if (voc <= 600) return {"Moderate"};
+      else if (voc <= 1500) return {"Unhealthy"};
+      else return {"Hazardous"};
+    update_interval: 15s
+
+  - platform: template
+    name: "Room Health"
+    id: room_health_text
+    icon: mdi:home-heart
+    lambda: |-
+      float score = id(room_health_score).state;
+      if (score < 0) return {"Unknown"};
+      else if (score >= 100.0) return {"Excellent"};
+      else if (score >= 95.0) return {"Great"};
+      else if (score >= 90.0) return {"Good"};
+      else if (score >= 80.0) return {"Fair"};
+      else if (score >= 60.0) return {"Poor"};
+      else return {"Bad"};
+    update_interval: 15s
+
 button:
   - platform: restart
     name: "ESP32 Restart"
@@ -335,4 +412,151 @@ number:
         - globals.set:
             id: humidity_offset
             value: !lambda 'return float(x);'
+
+  # Room Health Calibration Values
+  # These values allow the user to tweak the values of the room health calculation
+  - platform: template
+    name: "Room Health Min Temperature"
+    id: room_health_temperature_min_setter
+    min_value: 15
+    max_value: 30
+    step: 0.5
+    lambda: |-
+      return id(room_health_temperature_min);
+    set_action:
+      then:
+        - globals.set:
+            id: room_health_temperature_min
+            value: !lambda 'return float(x);'
+  - platform: template
+    name: "Room Health Max Temperature"
+    id: room_health_temperature_max_setter
+    min_value: 15
+    max_value: 30
+    step: 0.5
+    lambda: |-
+      return id(room_health_temperature_max);
+    set_action:
+      then:
+        - globals.set:
+            id: room_health_temperature_max
+            value: !lambda 'return float(x);'
+  - platform: template
+    name: "Room Health Temperature Penalty"
+    id: room_health_temperature_penalty_setter
+    min_value: 1
+    max_value: 20
+    step: 1
+    lambda: |-
+      return int(id(room_health_temperature_penalty));
+    set_action:
+      then:
+        - globals.set:
+            id: room_health_temperature_penalty
+            value: !lambda 'return float(x);'
+  - platform: template
+    name: "Room Health Min Humidity"
+    id: room_health_humidity_min_setter
+    min_value: 20
+    max_value: 80
+    step: 1.0
+    lambda: |-
+      return id(room_health_humidity_min);
+    set_action:
+      then:
+        - globals.set:
+            id: room_health_humidity_min
+            value: !lambda 'return float(x);'
+  - platform: template
+    name: "Room Health Max Humidity"
+    id: room_health_humidity_max_setter
+    min_value: 20
+    max_value: 80
+    step: 1.0
+    lambda: |-
+      return id(room_health_humidity_max);
+    set_action:
+      then:
+        - globals.set:
+            id: room_health_humidity_max
+            value: !lambda 'return float(x);'
+  - platform: template
+    name: "Room Health Humidity Penalty"
+    id: room_health_humidity_penalty_setter
+    min_value: 1
+    max_value: 10
+    step: 1
+    lambda: |-
+      return int(id(room_health_humidity_penalty));
+    set_action:
+      then:
+        - globals.set:
+            id: room_health_humidity_penalty
+            value: !lambda 'return float(x);'
+  - platform: template
+    name: "Room Health VOC Weight"
+    id: room_health_voc_weight_setter
+    min_value: 0.00
+    max_value: 1.00
+    step: 0.01
+    lambda: |-
+      return id(room_health_voc_weight);
+    set_action:
+      - if:
+          condition:
+            lambda: |-
+              float total = x + id(room_health_temperature_weight) + id(room_health_humidity_weight);
+              return (total > 0.0) && (total <= 1.0);
+          then:
+            - globals.set:
+                id: room_health_voc_weight
+                value: !lambda 'return float(x);'
+          else:
+            - logger.log:
+                format: "Rejected VOC weight %.2f (total would be out of range: must be > 0.0 and ≤ 1.0)"
+                args: [ 'x' ]
+  - platform: template
+    name: "Room Health Temperature Weight"
+    id: room_health_temperature_weight_setter
+    min_value: 0.00
+    max_value: 1.00
+    step: 0.01
+    lambda: |-
+      return id(room_health_temperature_weight);
+    set_action:
+      - if:
+          condition:
+            lambda: |-
+              float total = x + id(room_health_voc_weight) + id(room_health_humidity_weight);
+              return (total > 0.0) && (total <= 1.0);
+          then:
+            - globals.set:
+                id: room_health_temperature_weight
+                value: !lambda 'return float(x);'
+          else:
+            - logger.log:
+                format: "Rejected Temperature weight %.2f (total would be out of range: must be > 0.0 and ≤ 1.0)"
+                args: [ 'x' ]
+  - platform: template
+    name: "Room Health Humidity Weight"
+    id: room_health_humidity_weight_setter
+    min_value: 0.00
+    max_value: 1.00
+    step: 0.01
+    lambda: |-
+      return id(room_health_humidity_weight);
+    set_action:
+      - if:
+          condition:
+            lambda: |-
+              float total = x + id(room_health_temperature_weight) + id(room_health_voc_weight);
+              return (total > 0.0) && (total <= 1.0);
+          then:
+            - globals.set:
+                id: room_health_humidity_weight
+                value: !lambda 'return float(x);'
+          else:
+            - logger.log:
+                format: "Rejected Humidity weight %.2f (total would be out of range: must be > 0.0 and ≤ 1.0)"
+                args: [ 'x' ]
 
